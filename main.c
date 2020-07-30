@@ -106,6 +106,18 @@ Imlib_Image *load_images_from_folder_formatted(const char* folder_path, const ch
 	return images;
 }
 
+Pixmap *load_pixmaps_from_images(const Imlib_Image *images, const int amount)
+{
+	Pixmap *temp = malloc(sizeof(Pixmap)*amount);
+	for (int i = 0; i < amount; i++) {
+		*(temp+i) = XCreatePixmap(XDPY, ROOT_WIN, 1920, 1080, BITDEPTH);
+		imlib_context_set_drawable(*(temp+i));
+		imlib_context_set_image(*(images+i));
+		imlib_render_image_on_drawable(0, 0);
+	}
+	return temp;
+}
+
 struct timespec timespec_get_difference(struct timespec start, struct timespec end)
 {
     struct timespec temp;
@@ -151,17 +163,25 @@ int main(int argc, const char *argv[])
 	imlib_context_set_display(XDPY);
 	imlib_context_set_visual(VISUAL);
 	imlib_context_set_colormap(COLORMAP);
-	Pixmap pixmap = XCreatePixmap(XDPY, ROOT_WIN, 1920, 1080, BITDEPTH);
-	imlib_context_set_drawable(pixmap);
+	Pixmap *pixmaps = load_pixmaps_from_images(entries, NUMBER_OF_FRAMES);
+	if (!pixmaps) {
+		printf("Failed to initialize pixmaps\n");
+		exit(1);
+	}
+
+	for (int i = 0; i < NUMBER_OF_FRAMES; i++) {
+		imlib_context_set_image(entries[i]);
+		imlib_free_image();
+	}
+
 	int current = 0;
 	int difference;
 	clock_gettime(CLOCK_REALTIME, &start);
 	set_atoms();
-	one_time_pixmap_setup(pixmap);
+	Pixmap current_pixmap;
 	while (1) {
-		imlib_context_set_image(entries[current]);
-		imlib_render_image_on_drawable(0, 0);
-		set_pixmap_property(pixmap);
+		current_pixmap = *(pixmaps+current);
+		set_pixmap_property(current_pixmap);
 		current++;
 		if (current >= NUMBER_OF_FRAMES) {
 			current = 0;
@@ -172,16 +192,14 @@ int main(int argc, const char *argv[])
 			difference = nsec_per_frame;
 		}
 		usleep(nsec_per_frame-difference);
-		//usleep((start.tv_nsec+nsec_per_frame-end.tv_nsec) / 1000000);
 		clock_gettime(CLOCK_REALTIME, &start);
 	}
 
+
 	for (int i = 0; i < NUMBER_OF_FRAMES; i++) {
-		imlib_context_set_image(entries[i]);
-		imlib_free_image();
+		XFreePixmap(XDPY, *(pixmaps+i));
 	}
 
-	XFreePixmap(XDPY, pixmap);
 	free(entries);
 
 	return 0;
