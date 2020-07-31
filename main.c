@@ -156,7 +156,7 @@ int main(int argc, const char *argv[])
 
 	Imlib_Image *entries = load_images_from_folder_formatted(argv[1], "%05d");
 	if (!entries) {
-		printf("Failed getting images\n");
+		printf("Failed loading images from the folder %s\n", argv[1]);
 		exit(1);
 	}
 
