@@ -10,6 +10,8 @@
 
 #include <Imlib2.h>
 
+/* GLOBALS */
+
 Display            *XDPY;
 unsigned int        XSCRN_NUM;
 Screen             *XSCRN;
@@ -17,10 +19,56 @@ Window              ROOT_WIN;
 int                 BITDEPTH;
 Colormap            COLORMAP;
 Visual             *VISUAL;
-
 int NUMBER_OF_FRAMES;
-
 Atom prop_root, prop_esetroot;
+
+/* ARGS */
+
+int MILLISECONDS_PER_FRAME = -1;
+char FRAME_FILE_NAME_FORMAT[256];
+char FOLDER_NAME[256];
+
+void print_usage() {
+	printf("Usage: asetroot [FOLDER] ... [-t milliseconds]\n");
+	printf("Where [FOLDER] is a folder with \n");
+	printf("Options and arguments:\n");
+	printf("-t    : sets the amount of milliseconds inbetween each frame\n");
+	printf("        default is 100\n");
+	printf("-f    : sets the format for the file names in [FOLDER]\n");
+	printf("        default is \"%%05d.gif\"\n");
+}
+
+void parse_args(const int argc, const char *argv[]) {
+	int opt;
+	strcat(FOLDER_NAME, argv[1]);
+	while((opt = getopt(argc, argv, "t:f:")) != -1) {
+		switch(opt) {
+			// TODO : This will probably end up bloating the main file after a while
+			// consider adding parse_args into another file
+			case 't':
+				MILLISECONDS_PER_FRAME = atoi(optarg);
+				if (MILLISECONDS_PER_FRAME < 1) {
+					printf("ERROR: -t is an illegal value, %d\n", MILLISECONDS_PER_FRAME);
+					print_usage();
+					exit(1);
+				}
+				break;
+			case 'f':
+				strcat(FRAME_FILE_NAME_FORMAT, optarg);
+				break;
+			case '?':
+				print_usage();
+				exit(1);
+				break;
+		}
+	}
+	if (MILLISECONDS_PER_FRAME == -1) {
+		MILLISECONDS_PER_FRAME = 100;
+	}
+	if (FRAME_FILE_NAME_FORMAT[0] == '\0') {
+		strcat(FRAME_FILE_NAME_FORMAT, "%05d.gif");
+	}
+}
 
 // Since these seem to never change throughout X's lifetime we can just run this once
 // keyword there, seem, this might break something I'm not aware of
@@ -35,22 +83,17 @@ void set_atoms() {
 	}
 }
 
-void one_time_pixmap_setup(Pixmap p)
-{
-    XChangeProperty(XDPY, ROOT_WIN, prop_esetroot, XA_PIXMAP, 32,
-                    PropModeReplace, (unsigned char *) &p, 1);
-}
-
 // From setroot, sets a pixmap to be root
 // Commented a bunch of stuff out that doesn't seem to be needed
+// Will keep just in case it ends up being needed however...
 void
 set_pixmap_property(Pixmap p)
 {
 //  Atom prop_root, prop_esetroot;
 //	Atom type;
-//  int format;
-//  unsigned long length, after;
-//  unsigned char *data_root, *data_esetroot;
+//    int format;
+//    unsigned long length, after;
+//    unsigned char *data_root, *data_esetroot;
 
 //    if ((prop_root != None) && (prop_esetroot != None)) {
 //        XGetWindowProperty(XDPY, ROOT_WIN, prop_root, 0L, 1L, False,
@@ -67,28 +110,30 @@ set_pixmap_property(Pixmap p)
 //        if (data_root) { free(data_root); }
 //    }
 
-//    prop_root = XInternAtom(XDPY, "_XROOTPMAP_ID", False);
-//    prop_esetroot = XInternAtom(XDPY, "ESETROOTPMAP_ID", False);
+//  prop_root = XInternAtom(XDPY, "_XROOTPMAP_ID", False);
+//  prop_esetroot = XInternAtom(XDPY, "ESETROOTPMAP_ID", False);
 
     XChangeProperty(XDPY, ROOT_WIN, prop_root, XA_PIXMAP, 32,
                     PropModeReplace, (unsigned char *) &p, 1);
 //    XChangeProperty(XDPY, ROOT_WIN, prop_esetroot, XA_PIXMAP, 32,
 //                    PropModeReplace, (unsigned char *) &p, 1);
 
-    XSetCloseDownMode(XDPY, RetainPermanent);
+//    XSetCloseDownMode(XDPY, RetainPermanent);
     XFlush(XDPY);
 }
 
 Imlib_Image *load_images_from_folder_formatted(const char* folder_path, const char* format) {
 	int frame_number = 0;
-	const char* extension = ".gif";
-	char current_file[128];
-	char file_name[128];
+	char current_file[256];
+	char file_name[256];
 	snprintf(file_name, 128, format, frame_number);
+	if (file_name[0] == '\0') {
+		fprintf(stderr, "Error formatting file names using format %s\n", format);
+		exit(1);
+	}
 	memset(current_file, 0, sizeof(current_file));
 	strcat(current_file, folder_path);
 	strcat(current_file, file_name);
-	strcat(current_file, extension);
 	Imlib_Image *images = NULL;
 	while (access(current_file, R_OK) != -1){
 		Imlib_Image temp_image;
@@ -100,7 +145,6 @@ Imlib_Image *load_images_from_folder_formatted(const char* folder_path, const ch
 		snprintf(file_name, 128, format, frame_number);
 		strcat(current_file, folder_path);
 		strcat(current_file, file_name);
-		strcat(current_file, extension);
 	}
 	NUMBER_OF_FRAMES = frame_number;
 	return images;
@@ -137,14 +181,13 @@ struct timespec timespec_get_difference(struct timespec start, struct timespec e
 int main(int argc, const char *argv[])
 {
 	if (argc < 2) {
-		printf("Usage: asetroot <folder>\n");
-		printf("\n");
-		printf("Folder contains frames with the names with the format %%05d in order.\n");
+		print_usage();
 		exit(1);
 	}
+	parse_args(argc, argv);
 
 	struct timespec start={0,0}, end={0,0};
-	int nsec_per_frame = 75*1000; // *1000 to turn msec into nsec
+	int nsec_per_frame = MILLISECONDS_PER_FRAME*1000; // *1000 to turn msec into nsec
 
 	XDPY = XOpenDisplay(NULL);
     XSCRN_NUM = DefaultScreen(XDPY);
@@ -154,15 +197,17 @@ int main(int argc, const char *argv[])
     VISUAL = DefaultVisual(XDPY, XSCRN_NUM);
     BITDEPTH = DefaultDepth(XDPY, XSCRN_NUM);
 
-	Imlib_Image *entries = load_images_from_folder_formatted(argv[1], "%05d");
-	if (!entries) {
-		printf("Failed loading images from the folder %s\n", argv[1]);
-		exit(1);
-	}
-
 	imlib_context_set_display(XDPY);
 	imlib_context_set_visual(VISUAL);
 	imlib_context_set_colormap(COLORMAP);
+
+	Imlib_Image *entries = load_images_from_folder_formatted(FOLDER_NAME, FRAME_FILE_NAME_FORMAT);
+	if (!entries) {
+		printf("Failed loading images from the folder %s\n", FOLDER_NAME);
+		printf("Format: %s\n", FRAME_FILE_NAME_FORMAT);
+		exit(1);
+	}
+
 	Pixmap *pixmaps = load_pixmaps_from_images(entries, NUMBER_OF_FRAMES);
 	if (!pixmaps) {
 		printf("Failed to initialize pixmaps\n");
@@ -182,6 +227,10 @@ int main(int argc, const char *argv[])
 	while (1) {
 		current_pixmap = *(pixmaps+current);
 		set_pixmap_property(current_pixmap);
+
+		XSetWindowBackgroundPixmap(XDPY, ROOT_WIN, current_pixmap);
+		XClearWindow(XDPY, ROOT_WIN);
+
 		current++;
 		if (current >= NUMBER_OF_FRAMES) {
 			current = 0;
@@ -200,6 +249,7 @@ int main(int argc, const char *argv[])
 		XFreePixmap(XDPY, *(pixmaps+i));
 	}
 
+	free(pixmaps);
 	free(entries);
 
 	return 0;
