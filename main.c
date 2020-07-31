@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <time.h>
 #include <string.h>
-#include <dirent.h>
 #include <unistd.h>
 #include <stdlib.h>
 
@@ -24,27 +23,33 @@ Atom prop_root, prop_esetroot;
 
 /* ARGS */
 
+char FOLDER_NAME[256];
 int MILLISECONDS_PER_FRAME = -1;
 char FRAME_FILE_NAME_FORMAT[256];
-char FOLDER_NAME[256];
+
+
 
 void print_usage() {
 	printf("Usage: asetroot [FOLDER] ... [-t milliseconds]\n");
-	printf("Where [FOLDER] is a folder with \n");
+	printf("Where [FOLDER] is a folder with all the frames.\n");
+	printf("Frames should have a file name that can be incremented using a printf format, standard is %%05d.gif\n");
+	printf("This program does not do any resizing or gif converting, if you wish to do that check out ImageMagick\n");
+	printf("\n");
 	printf("Options and arguments:\n");
-	printf("-t    : sets the amount of milliseconds inbetween each frame\n");
+	printf("-t    : sets the amount of milliseconds between each frame\n");
 	printf("        default is 100\n");
 	printf("-f    : sets the format for the file names in [FOLDER]\n");
-	printf("        default is \"%%05d.gif\"\n");
+	printf("        default is %%05d.gif\n");
 }
 
 void parse_args(const int argc, const char *argv[]) {
 	int opt;
 	strcat(FOLDER_NAME, argv[1]);
-	while((opt = getopt(argc, argv, "t:f:")) != -1) {
+	// TODO : This throws an annoying warning right now
+	while((opt = getopt(argc, argv, "t:f:h")) != -1) {
 		switch(opt) {
 			// TODO : This will probably end up bloating the main file after a while
-			// consider adding parse_args into another file
+			// consider moving parse_args into another file
 			case 't':
 				MILLISECONDS_PER_FRAME = atoi(optarg);
 				if (MILLISECONDS_PER_FRAME < 1) {
@@ -56,6 +61,9 @@ void parse_args(const int argc, const char *argv[]) {
 			case 'f':
 				strcat(FRAME_FILE_NAME_FORMAT, optarg);
 				break;
+			case 'h':
+				print_usage();
+				exit(1);
 			case '?':
 				print_usage();
 				exit(1);
@@ -83,32 +91,33 @@ void set_atoms() {
 	}
 }
 
-// From setroot, sets a pixmap to be root
-// Commented a bunch of stuff out that doesn't seem to be needed
-// Will keep just in case it ends up being needed however...
+// From setroot.c, sets a pixmap to be root
+// Commented out some stuff that is handled elsewhere
+// TODO : I'm unsure if the nested if cases are needed,
+// However I'm scared that deleting them will cause some memory leak within X
 void
 set_pixmap_property(Pixmap p)
 {
 //  Atom prop_root, prop_esetroot;
-//	Atom type;
-//    int format;
-//    unsigned long length, after;
-//    unsigned char *data_root, *data_esetroot;
+	Atom type;
+    int format;
+    unsigned long length, after;
+    unsigned char *data_root, *data_esetroot;
 
-//    if ((prop_root != None) && (prop_esetroot != None)) {
-//        XGetWindowProperty(XDPY, ROOT_WIN, prop_root, 0L, 1L, False,
-//                           AnyPropertyType, &type, &format,
-//                           &length, &after, &data_root);
-//
-//        if (type == XA_PIXMAP) {
-//            XGetWindowProperty(XDPY, ROOT_WIN, prop_esetroot, 0L, 1L,
-//                               False, AnyPropertyType, &type, &format,
-//                               &length, &after, &data_esetroot);
-//
-//            if (data_esetroot) { free(data_esetroot); }
-//        }
-//        if (data_root) { free(data_root); }
-//    }
+    if ((prop_root != None) && (prop_esetroot != None)) {
+        XGetWindowProperty(XDPY, ROOT_WIN, prop_root, 0L, 1L, False,
+                           AnyPropertyType, &type, &format,
+                           &length, &after, &data_root);
+
+        if (type == XA_PIXMAP) {
+            XGetWindowProperty(XDPY, ROOT_WIN, prop_esetroot, 0L, 1L,
+                               False, AnyPropertyType, &type, &format,
+                               &length, &after, &data_esetroot);
+
+            if (data_esetroot) { free(data_esetroot); }
+        }
+        if (data_root) { free(data_root); }
+    }
 
 //  prop_root = XInternAtom(XDPY, "_XROOTPMAP_ID", False);
 //  prop_esetroot = XInternAtom(XDPY, "ESETROOTPMAP_ID", False);
@@ -152,9 +161,11 @@ Imlib_Image *load_images_from_folder_formatted(const char* folder_path, const ch
 
 Pixmap *load_pixmaps_from_images(const Imlib_Image *images, const int amount)
 {
+	int width = WidthOfScreen(XSCRN);
+	int height = HeightOfScreen(XSCRN);
 	Pixmap *temp = malloc(sizeof(Pixmap)*amount);
 	for (int i = 0; i < amount; i++) {
-		*(temp+i) = XCreatePixmap(XDPY, ROOT_WIN, 1920, 1080, BITDEPTH);
+		*(temp+i) = XCreatePixmap(XDPY, ROOT_WIN, width, height, BITDEPTH);
 		imlib_context_set_drawable(*(temp+i));
 		imlib_context_set_image(*(images+i));
 		imlib_render_image_on_drawable(0, 0);
@@ -178,6 +189,7 @@ struct timespec timespec_get_difference(struct timespec start, struct timespec e
     }
     return temp;
 }
+
 int main(int argc, const char *argv[])
 {
 	if (argc < 2) {
@@ -235,6 +247,7 @@ int main(int argc, const char *argv[])
 		if (current >= NUMBER_OF_FRAMES) {
 			current = 0;
 		}
+
 		clock_gettime(CLOCK_REALTIME, &end);
 		difference = timespec_get_difference(start, end).tv_nsec/1000;
 		if (difference > nsec_per_frame) {
