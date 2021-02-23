@@ -94,8 +94,6 @@ void set_atoms() {
 
 // From setroot.c, sets a pixmap to be root
 // Commented out some stuff that is handled elsewhere
-// TODO : I'm unsure if the nested if cases are needed,
-// However I'm scared that deleting them will cause some memory leak within X
 void
 set_pixmap_property(Pixmap p)
 {
