@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <signal.h>
 
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
@@ -20,6 +21,7 @@ Colormap            COLORMAP;
 Visual             *VISUAL;
 int NUMBER_OF_FRAMES;
 Atom prop_root, prop_esetroot;
+int keep_looping;
 
 /* ARGS */
 
@@ -190,6 +192,12 @@ struct timespec timespec_get_difference(struct timespec start, struct timespec e
     return temp;
 }
 
+void exit_loop(int sig)
+{
+	printf("Received %s. Exiting...\n", strsignal(sig));
+	keep_looping = 0;
+}
+
 int main(int argc, const char *argv[])
 {
 	if (argc < 2) {
@@ -236,7 +244,10 @@ int main(int argc, const char *argv[])
 	clock_gettime(CLOCK_REALTIME, &start);
 	set_atoms();
 	Pixmap current_pixmap;
-	while (1) {
+	signal(SIGINT, exit_loop);
+	signal(SIGTERM, exit_loop);
+	keep_looping = 1;
+	while (keep_looping) {
 		current_pixmap = *(pixmaps+current);
 		set_pixmap_property(current_pixmap);
 
@@ -256,7 +267,6 @@ int main(int argc, const char *argv[])
 		usleep(nsec_per_frame-difference);
 		clock_gettime(CLOCK_REALTIME, &start);
 	}
-
 
 	for (int i = 0; i < NUMBER_OF_FRAMES; i++) {
 		XFreePixmap(XDPY, *(pixmaps+i));
