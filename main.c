@@ -47,8 +47,7 @@ void print_usage() {
 void parse_args(const int argc, const char *argv[]) {
 	int opt;
 	strcat(FOLDER_NAME, argv[1]);
-	// TODO : This throws an annoying warning right now
-	while((opt = getopt(argc, argv, "t:f:h")) != -1) {
+	while((opt = getopt(argc, (char**)argv, "t:f:h")) != -1) {
 		switch(opt) {
 			// TODO : This will probably end up bloating the main file after a while
 			// consider moving parse_args into another file
