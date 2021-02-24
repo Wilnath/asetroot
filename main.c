@@ -47,8 +47,7 @@ void print_usage() {
 void parse_args(const int argc, const char *argv[]) {
 	int opt;
 	strcat(FOLDER_NAME, argv[1]);
-	// TODO : This throws an annoying warning right now
-	while((opt = getopt(argc, argv, "t:f:h")) != -1) {
+	while((opt = getopt(argc, (char**)argv, "t:f:h")) != -1) {
 		switch(opt) {
 			// TODO : This will probably end up bloating the main file after a while
 			// consider moving parse_args into another file
@@ -95,8 +94,6 @@ void set_atoms() {
 
 // From setroot.c, sets a pixmap to be root
 // Commented out some stuff that is handled elsewhere
-// TODO : I'm unsure if the nested if cases are needed,
-// However I'm scared that deleting them will cause some memory leak within X
 void
 set_pixmap_property(Pixmap p)
 {
