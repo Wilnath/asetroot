@@ -168,6 +168,8 @@ Pixmap *load_pixmaps_from_images(const Imlib_Image *images, const int amount)
 		imlib_context_set_drawable(*(temp+i));
 		imlib_context_set_image(*(images+i));
 		imlib_render_image_on_drawable(0, 0);
+		imlib_context_set_image(images[i]);
+		imlib_free_image();
 	}
 	return temp;
 }
@@ -229,11 +231,6 @@ int main(int argc, const char *argv[])
 	if (!pixmaps) {
 		printf("Failed to initialize pixmaps\n");
 		exit(1);
-	}
-
-	for (int i = 0; i < NUMBER_OF_FRAMES; i++) {
-		imlib_context_set_image(entries[i]);
-		imlib_free_image();
 	}
 
 	int current = 0;
